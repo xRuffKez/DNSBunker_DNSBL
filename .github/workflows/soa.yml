@@ -2,8 +2,8 @@ name: Domain SOA Checker
 
 on:
   schedule:
-    - cron: "0 2 * * *"   
-  workflow_dispatch:    
+    - cron: "0 2 * * *"   # Runs daily at 2 AM UTC
+  workflow_dispatch:      # Allow manual trigger
 
 jobs:
   check-domains:
@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v4.7.1
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -26,23 +26,23 @@ jobs:
           python <<'EOF'
           import dns.resolver
           import dns.rcode
-          import os
+          from pathlib import Path
 
-          resolvers = [
-              dns.resolver.Resolver(configure=False),
-              dns.resolver.Resolver(configure=False)
-          ]
-          resolvers[0].nameservers = ["1.1.1.1"]
-          resolvers[1].nameservers = ["8.8.8.8"]
+          # Configure resolvers (Cloudflare + Google)
+          resolvers = []
+          for ns in (["1.1.1.1"], ["8.8.8.8"]):
+              r = dns.resolver.Resolver(configure=False)
+              r.nameservers = ns
+              resolvers.append(r)
 
-          for filename in ["01-mal", "02-phish", "03-fake", "04-ads", "05-popup", "06-scam"]:
-              if not os.path.exists(filename):
-                  continue
-              
-              valid_domains = set()
-              with open(filename, "r") as f:
+          # Process all list files that start with digits (e.g. 01-mal, 02-phish, etc.)
+          files = sorted([p for p in Path(".").iterdir() if p.is_file() and p.name[:2].isdigit()])
+
+          for path in files:
+              with path.open("r") as f:
                   domains = [line.strip() for line in f if line.strip()]
 
+              valid_domains = set()
               for domain in domains:
                   ok = False
                   for r in resolvers:
@@ -51,10 +51,31 @@ jobs:
                           if answer.response.rcode() == dns.rcode.NOERROR:
                               ok = True
                               break
-                      except Exception:
-                          pass
+                      except dns.resolver.NXDOMAIN:
+                          print(f"❌ NXDOMAIN: {domain}")
+                      except dns.resolver.Timeout:
+                          print(f"⚠️ Timeout: {domain}")
+                      except dns.resolver.NoAnswer:
+                          print(f"⚠️ NoAnswer: {domain}")
+                      except Exception as e:
+                          print(f"⚠️ Error {domain}: {e}")
                   if ok:
+                      print(f"✅ Valid: {domain}")
                       valid_domains.add(domain)
 
-              with open(filename, "w") as f:
-                  f.write("\n".join(s
+              # Write back sorted valid domains
+              with path.open("w") as f:
+                  f.write("\n".join(sorted(valid_domains)) + "\n")
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-clean domain lists (SOA check, dedupe, sort)"
+            git push
+          fi
