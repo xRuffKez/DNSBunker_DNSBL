@@ -2,8 +2,8 @@ name: Domain SOA Checker
 
 on:
   schedule:
-    - cron: "0 2 * * *"   # Runs daily at 2 AM UTC
-  workflow_dispatch:      # Allow manual trigger
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 jobs:
   check-domains:
@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d
         with:
           python-version: "3.x"
 
@@ -28,14 +28,12 @@ jobs:
           import dns.rcode
           from pathlib import Path
 
-          # Configure resolvers (Cloudflare + Google)
           resolvers = []
           for ns in (["1.1.1.1"], ["8.8.8.8"]):
               r = dns.resolver.Resolver(configure=False)
               r.nameservers = ns
               resolvers.append(r)
 
-          # Process all list files that start with digits (e.g. 01-mal, 02-phish, etc.)
           files = sorted([p for p in Path(".").iterdir() if p.is_file() and p.name[:2].isdigit()])
 
           for path in files:
@@ -52,18 +50,17 @@ jobs:
                               ok = True
                               break
                       except dns.resolver.NXDOMAIN:
-                          print(f"❌ NXDOMAIN: {domain}")
+                          print(f"NXDOMAIN: {domain}")
                       except dns.resolver.Timeout:
-                          print(f"⚠️ Timeout: {domain}")
+                          print(f"Timeout: {domain}")
                       except dns.resolver.NoAnswer:
-                          print(f"⚠️ NoAnswer: {domain}")
+                          print(f"NoAnswer: {domain}")
                       except Exception as e:
-                          print(f"⚠️ Error {domain}: {e}")
+                          print(f"Error {domain}: {e}")
                   if ok:
-                      print(f"✅ Valid: {domain}")
+                      print(f"Valid: {domain}")
                       valid_domains.add(domain)
 
-              # Write back sorted valid domains
               with path.open("w") as f:
                   f.write("\n".join(sorted(valid_domains)) + "\n")
           EOF
