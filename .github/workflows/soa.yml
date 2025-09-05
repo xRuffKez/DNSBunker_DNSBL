@@ -2,8 +2,9 @@ name: Domain SOA Checker
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 * * * *"  
   workflow_dispatch:     
+  
 
 jobs:
   check-domains:
@@ -11,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v4.7.1
         with:
           python-version: "3.x"
 
